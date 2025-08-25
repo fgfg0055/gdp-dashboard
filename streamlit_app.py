@@ -1,151 +1,40 @@
+# streamlit_app.py
+
 import streamlit as st
-import pandas as pd
-import math
-from pathlib import Path
+import random
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
-)
+# 앱의 제목 설정
+st.title("🥠 행운의 포츈쿠키")
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
-
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
-
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
-
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
-
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
-
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
-
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
-
-    return gdp_df
-
-gdp_df = get_gdp_data()
-
-# -----------------------------------------------------------------------------
-# Draw the actual page
-
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
-
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
-
-# Add some spacing
-''
-''
-
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
+# 미리 준비된 운세 메시지 리스트
+fortune_messages = [
+    "새로운 기회가 당신을 찾아올 것입니다.",
+    "작은 변화가 큰 성공으로 이어질 것입니다.",
+    "오늘은 당신의 날입니다! 모든 일이 잘 풀릴 거예요.",
+    "주변 사람들에게 친절을 베풀면 더 큰 복이 돌아옵니다.",
+    "꾸준함이 결국 당신을 정상으로 이끌 것입니다.",
+    "생각지도 못한 곳에서 행운이 찾아옵니다.",
+    "잠시 쉬어가세요. 휴식은 다음 도약을 위한 준비입니다.",
+    "당신의 재능이 곧 빛을 발하게 될 것입니다.",
+    "긍정적인 생각은 긍정적인 결과를 낳습니다.",
+    "오늘은 새로운 것을 배우기에 완벽한 날입니다."
 ]
 
-st.header('GDP over time', divider='gray')
+# st.session_state를 사용하여 상태 유지
+# 'fortune' 이라는 키가 세션 상태에 없으면 초기 메시지로 설정
+if 'fortune' not in st.session_state:
+    st.session_state.fortune = "아래 버튼을 눌러 오늘의 운세를 확인하세요!"
 
-''
+# '오늘의 운세 확인하기' 버튼 생성
+if st.button("오늘의 운세 확인하기"):
+    # 버튼이 클릭되면, 운세 리스트에서 메시지를 랜덤으로 선택
+    selected_fortune = random.choice(fortune_messages)
+    # 선택된 메시지를 세션 상태에 저장하여 화면이 갱신되어도 유지되도록 함
+    st.session_state.fortune = selected_fortune
 
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
+# 운세 메시지를 화면에 보기 좋게 출력
+st.success(f"**{st.session_state.fortune}**")
 
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+# 간단한 설명 추가
+st.markdown("---")
+st.info("버튼을 누를 때마다 새로운 운세 메시지가 나타납니다.")
